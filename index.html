@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ongen</title>
+  <style>
+    :root {
+      --bg-color: #0f1115;
+      --card-bg: #181b20;
+      --card-border: #262a33;
+      --modal-bg: #1c2026;
+      --accent-color: #00adb5;
+      --accent-hover: #00fff5;
+      --text-main: #f0f2f5;
+      --text-muted: #8a94a6;
+      --danger-color: #e63946;
+      --warning-color: #f4a261;
+      --btn-bg: #222630;
+      --btn-hover: #2d323e;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 24px 16px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 840px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .header-area {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--card-border);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--text-main);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .select-input {
+      background-color: var(--btn-bg);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+    .select-input:focus {
+      border-color: var(--accent-color);
+    }
+
+    button {
+      background-color: var(--btn-bg);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+    button:hover:not(:disabled) {
+      background-color: var(--btn-hover);
+      border-color: var(--text-muted);
+    }
+    button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .icon-svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    .loading-banner {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .loading-text {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .progress-bar-bg {
+      background-color: #101216;
+      height: 6px;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .progress-bar-fill {
+      background-color: var(--accent-color);
+      height: 100%;
+      width: 0%;
+      transition: width 0.2s;
+    }
+
+    .section-panel {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid var(--card-border);
+    }
+    .panel-header {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .btn-cue {
+      background-color: var(--btn-bg);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .btn-cue:hover:not(:disabled) {
+      border-color: var(--accent-color);
+      color: var(--accent-color);
+    }
+
+    .master-panel {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      border: 1px solid var(--card-border);
+    }
+
+    .controls-main {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-primary {
+      background-color: var(--accent-color);
+      color: #0d1117;
+      border: none;
+      padding: 10px 28px;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background-color: var(--accent-hover);
+      color: #000;
+    }
+
+    .seek-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent-color);
+      cursor: pointer;
+      height: 4px;
+      border-radius: 2px;
+    }
+
+    /* A-B ループパネル */
+    .loop-panel {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      background-color: #121418;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      flex-wrap: wrap;
+    }
+    .loop-toggle-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .loop-input-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .input-time-sm {
+      background-color: var(--btn-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 4px 8px;
+      border-radius: 4px;
+      width: 60px;
+      font-size: 0.8rem;
+      text-align: center;
+      font-family: monospace;
+    }
+    .input-time-sm:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+    .btn-loop.active {
+      background-color: var(--accent-color);
+      color: #000;
+      border-color: var(--accent-color);
+      font-weight: 600;
+    }
+
+    .control-sliders {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .slider-group {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .tracks-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .track-card {
+      background-color: var(--card-bg);
+      border-radius: 6px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border: 1px solid var(--card-border);
+    }
+    .track-card.is-metronome {
+      border-left: 3px solid var(--warning-color);
+    }
+
+    .track-info {
+      width: 160px;
+    }
+    .track-name {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .track-status {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .track-buttons {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-toggle {
+      padding: 6px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .btn-mute.active {
+      background-color: var(--danger-color);
+      color: #fff;
+      border-color: var(--danger-color);
+    }
+    .btn-solo.active {
+      background-color: var(--warning-color);
+      color: #111;
+      border-color: var(--warning-color);
+    }
+
+    .track-volume {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(4px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-container {
+      background-color: var(--modal-bg);
+      border-radius: 10px;
+      width: 90%;
+      max-width: 520px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .add-cue-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background-color: var(--card-bg);
+      padding: 14px;
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+    }
+    .form-row {
+      display: flex;
+      gap: 10px;
+    }
+    .form-input {
+      background-color: #121418;
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+
+    .cue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .cue-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: var(--card-bg);
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+    }
+    .cue-item-label {
+      font-weight: 500;
+      font-size: 0.85rem;
+    }
+    .cue-item-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: monospace;
+      margin-left: 8px;
+    }
+
+    .btn-danger {
+      background-color: transparent;
+      color: var(--danger-color);
+      border-color: var(--danger-color);
+      padding: 4px 10px;
+      font-size: 0.75rem;
+    }
+    .btn-danger:hover {
+      background-color: var(--danger-color);
+      color: #fff;
+    }
+
+    .modal-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    @media (max-width: 600px) {
+      .track-card { flex-wrap: wrap; }
+      .track-info { width: 100%; }
+      .track-volume { width: 100%; }
+      .form-row { flex-direction: column; }
+      .loop-panel { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header-area">
+    <h1 id="appTitle">ongen</h1>
+    <div class="header-controls">
+      <select id="bankSelect" class="select-input"></select>
+      <button id="btnOpenSettings">
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        設定
+      </button>
+    </div>
+  </div>
+
+  <div class="loading-banner" id="loadingBanner">
+    <div class="loading-text" id="loadingText">構成データを読み込んでいます...</div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
+  </div>
+
+  <div class="section-panel">
+    <div class="panel-header">
+      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
+      Sections / Cues
+    </div>
+    <div class="section-buttons" id="cueButtonsContainer"></div>
+  </div>
+
+  <div class="master-panel">
+    <div class="controls-main">
+      <button id="btnPlay" class="btn-primary" disabled>
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        再生
+      </button>
+      <button id="btnPause" disabled>
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        一時停止
+      </button>
+      <button id="btnStop" disabled>
+        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+        停止
+      </button>
+    </div>
+
+    <div class="seek-container">
+      <span id="timeCurrent">00:00</span>
+      <input type="range" id="seekSlider" value="0" min="0" max="100" step="0.1" disabled>
+      <span id="timeTotal">00:00</span>
+    </div>
+
+    <!-- A-B ループコントロール -->
+    <div class="loop-panel">
+      <div class="loop-toggle-group">
+        <button id="btnToggleLoop" class="btn-loop">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+          A-B Loop
+        </button>
+      </div>
+      <div class="loop-input-group">
+        <span>A:</span>
+        <input type="text" id="loopStartInput" class="input-time-sm" value="00:00">
+        <button id="btnSetLoopA" style="padding: 4px 8px; font-size: 0.75rem;">Set A</button>
+        <span style="margin-left: 8px;">B:</span>
+        <input type="text" id="loopEndInput" class="input-time-sm" value="00:00">
+        <button id="btnSetLoopB" style="padding: 4px 8px; font-size: 0.75rem;">Set B</button>
+      </div>
+    </div>
+
+    <div class="control-sliders">
+      <div class="slider-group">
+        <span>速度: <strong id="speedVal" style="color:var(--text-main)">1.0</strong>x</span>
+        <input type="range" id="speedSlider" value="1.0" min="0.5" max="1.5" step="0.05">
+      </div>
+      <div class="slider-group">
+        <span>全体音量:</span>
+        <input type="range" id="masterVolume" value="1" min="0" max="1" step="0.01">
+      </div>
+    </div>
+  </div>
+
+  <div class="tracks-panel" id="tracksContainer"></div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h2>セクション設定・編集</h2>
+      <button id="btnCloseSettings" style="padding: 4px 8px;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="add-cue-form">
+        <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">新規セクション追加</span>
+        <div class="form-row">
+          <input type="text" id="inputLabel" class="form-input" placeholder="ラベル (例: [B] Section B)" style="flex: 2;">
+          <input type="text" id="inputTime" class="form-input" placeholder="秒数 または MM:SS" style="flex: 1;">
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 4px;">
+          <button id="btnAddCue" style="flex: 1; background-color: var(--accent-color); color: #000; border: none; font-weight: 600;">追加</button>
+          <button id="btnAddCurrentCue" style="flex: 1;">現在位置を追加</button>
+        </div>
+      </div>
+
+      <div>
+        <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 8px;">登録済み一覧</span>
+        <div class="cue-list" id="cueSettingsList"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="btnResetCues" class="btn-danger">サーバー初期値にリセット</button>
+      <button id="btnSaveClose" style="background-color: var(--accent-color); color: #000; border: none; font-weight: 600;">完了</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let soundBanks = [];
+  let currentBankId = 'sound1';
+  let cuePoints = [];
+  let defaultCuePoints = [];
+  let trackDefinitions = [];
+  let audioCtx = null;
+  let masterGainNode = null;
+  let tracks = [];
+  let isPlaying = false;
+  let startTime = 0;
+  let pauseOffset = 0;
+  let duration = 0;
+  let animFrameId = null;
+
+  // ループ関連変数
+  let isLoopActive = false;
+  let loopStartTime = 0;
+  let loopEndTime = 0;
+
+  // DOM
+  const appTitle = document.getElementById('appTitle');
+  const bankSelect = document.getElementById('bankSelect');
+  const loadingBanner = document.getElementById('loadingBanner');
+  const loadingText = document.getElementById('loadingText');
+  const progressBar = document.getElementById('progressBar');
+  const cueButtonsContainer = document.getElementById('cueButtonsContainer');
+  const btnPlay = document.getElementById('btnPlay');
+  const btnPause = document.getElementById('btnPause');
+  const btnStop = document.getElementById('btnStop');
+  const seekSlider = document.getElementById('seekSlider');
+  const speedSlider = document.getElementById('speedSlider');
+  const masterVolume = document.getElementById('masterVolume');
+  const speedVal = document.getElementById('speedVal');
+  const timeCurrent = document.getElementById('timeCurrent');
+  const timeTotal = document.getElementById('timeTotal');
+  const tracksContainer = document.getElementById('tracksContainer');
+
+  // ループDOM
+  const btnToggleLoop = document.getElementById('btnToggleLoop');
+  const loopStartInput = document.getElementById('loopStartInput');
+  const loopEndInput = document.getElementById('loopEndInput');
+  const btnSetLoopA = document.getElementById('btnSetLoopA');
+  const btnSetLoopB = document.getElementById('btnSetLoopB');
+
+  // モーダル
+  const modalOverlay = document.getElementById('modalOverlay');
+  const btnOpenSettings = document.getElementById('btnOpenSettings');
+  const btnCloseSettings = document.getElementById('btnCloseSettings');
+  const btnSaveClose = document.getElementById('btnSaveClose');
+  const btnAddCue = document.getElementById('btnAddCue');
+  const btnAddCurrentCue = document.getElementById('btnAddCurrentCue');
+  const btnResetCues = document.getElementById('btnResetCues');
+  const inputLabel = document.getElementById('inputLabel');
+  const inputTime = document.getElementById('inputTime');
+  const cueSettingsList = document.getElementById('cueSettingsList');
+
+  async function loadConfig() {
+    try {
+      const res = await fetch('config.json');
+      if (!res.ok) throw new Error('config.json のロードに失敗しました');
+      const config = await res.json();
+
+      if (config.title) appTitle.innerText = config.title;
+      soundBanks = config.soundBanks || [{ id: 'sound1', name: 'Standard Sound' }];
+      defaultCuePoints = config.cuePoints || [];
+      trackDefinitions = config.tracks || [];
+
+      renderBankSelect();
+      loadCuePoints();
+      createTrackUI();
+      await loadAudioFiles();
+    } catch (err) {
+      console.error(err);
+      loadingText.innerText = '設定ファイル (config.json) のロードに失敗しました';
+      loadingText.style.color = 'var(--danger-color)';
+    }
+  }
+
+  function renderBankSelect() {
+    bankSelect.innerHTML = '';
+    soundBanks.forEach(bank => {
+      const opt = document.createElement('option');
+      opt.value = bank.id;
+      opt.innerText = bank.name;
+      bankSelect.appendChild(opt);
+    });
+    currentBankId = soundBanks[0]?.id || 'sound1';
+  }
+
+  function loadCuePoints() {
+    const saved = localStorage.getItem('clarinet_mixer_cues_v2');
+    if (saved) {
+      try { cuePoints = JSON.parse(saved); } catch (e) { cuePoints = [...defaultCuePoints]; }
+    } else {
+      cuePoints = [...defaultCuePoints];
+    }
+    sortAndRenderCues();
+  }
+
+  function saveCuePoints() {
+    localStorage.setItem('clarinet_mixer_cues_v2', JSON.stringify(cuePoints));
+    sortAndRenderCues();
+  }
+
+  function sortAndRenderCues() {
+    cuePoints.sort((a, b) => a.time - b.time);
+    renderCueButtons();
+    renderSettingsList();
+  }
+
+  function renderCueButtons() {
+    cueButtonsContainer.innerHTML = '';
+    cuePoints.forEach(cue => {
+      const btn = document.createElement('button');
+      btn.className = 'btn-cue';
+      btn.innerText = `${cue.label} (${formatTime(cue.time)})`;
+      btn.disabled = !tracks.some(t => t.buffer);
+      btn.addEventListener('click', () => jumpToTime(cue.time));
+      cueButtonsContainer.appendChild(btn);
+    });
+  }
+
+  function renderSettingsList() {
+    cueSettingsList.innerHTML = '';
+    if (cuePoints.length === 0) {
+      cueSettingsList.innerHTML = '<div style="font-size:0.8rem; color: var(--text-muted); text-align:center;">登録されているセクションはありません</div>';
+      return;
+    }
+
+    cuePoints.forEach((cue, index) => {
+      const item = document.createElement('div');
+      item.className = 'cue-item';
+      item.innerHTML = `
+        <div>
+          <span class="cue-item-label">${escapeHtml(cue.label)}</span>
+          <span class="cue-item-time">${formatTime(cue.time)}</span>
+        </div>
+        <button class="btn-danger" onclick="removeCue(${index})">削除</button>
+      `;
+      cueSettingsList.appendChild(item);
+    });
+  }
+
+  function parseTimeToSeconds(input) {
+    if (typeof input === 'number') return input;
+    const str = String(input).trim();
+    if (str.includes(':')) {
+      const parts = str.split(':');
+      const m = parseInt(parts[0], 10) || 0;
+      const s = parseFloat(parts[1]) || 0;
+      return m * 60 + s;
+    }
+    return parseFloat(str) || 0;
+  }
+
+  function addCue(label, timeVal) {
+    if (!label) return alert('ラベルを入力してください');
+    const sec = parseTimeToSeconds(timeVal);
+    cuePoints.push({ label: label.trim(), time: sec });
+    saveCuePoints();
+    inputLabel.value = '';
+    inputTime.value = '';
+  }
+
+  window.removeCue = function(index) {
+    cuePoints.splice(index, 1);
+    saveCuePoints();
+  };
+
+  function initAudioContext() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGainNode = audioCtx.createGain();
+      masterGainNode.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  }
+
+  function createTrackUI() {
+    tracksContainer.innerHTML = '';
+    tracks = trackDefinitions.map(def => {
+      const card = document.createElement('div');
+      card.className = `track-card ${def.isMetro ? 'is-metronome' : ''}`;
+      card.innerHTML = `
+        <div class="track-info">
+          <div class="track-name">${def.name}</div>
+          <div class="track-status" id="status-${def.id}">待機中</div>
+        </div>
+        <div class="track-buttons">
+          <button class="btn-toggle btn-mute" id="mute-${def.id}">MUTE</button>
+          <button class="btn-toggle btn-solo" id="solo-${def.id}">SOLO</button>
+        </div>
+        <div class="track-volume">
+          <input type="range" id="vol-${def.id}" value="1" min="0" max="1" step="0.01">
+        </div>
+      `;
+      tracksContainer.appendChild(card);
+
+      return {
+        ...def,
+        buffer: null,
+        source: null,
+        gainNode: null,
+        volume: 1,
+        isMuted: false,
+        isSolo: false
+      };
+    });
+
+    tracks.forEach(track => {
+      document.getElementById(`mute-${track.id}`).addEventListener('click', (e) => toggleMute(track, e.target));
+      document.getElementById(`solo-${track.id}`).addEventListener('click', (e) => toggleSolo(track, e.target));
+      document.getElementById(`vol-${track.id}`).addEventListener('input', (e) => setTrackVolume(track, parseFloat(e.target.value)));
+    });
+  }
+
+  async function loadAudioFiles() {
+    stop();
+    initAudioContext();
+    loadingBanner.style.display = 'block';
+    btnPlay.disabled = true;
+
+    let loadedCount = 0;
+    const totalCount = tracks.length;
+
+    for (const track of tracks) {
+      try {
+        document.getElementById(`status-${track.id}`).innerText = 'DL中...';
+        const url = `audio/${currentBankId}/${track.file}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP Error');
+        const arrayBuffer = await res.arrayBuffer();
+
+        document.getElementById(`status-${track.id}`).innerText = '解凍中...';
+        track.buffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+        document.getElementById(`status-${track.id}`).innerText = '準備完了';
+        document.getElementById(`status-${track.id}`).style.color = 'var(--accent-color)';
+
+        if (track.buffer.duration > duration) {
+          duration = track.buffer.duration;
+          timeTotal.innerText = formatTime(duration);
+          seekSlider.max = duration;
+          if (loopEndTime === 0) {
+            loopEndTime = duration;
+            loopEndInput.value = formatTime(duration);
+          }
+        }
+      } catch (err) {
+        document.getElementById(`status-${track.id}`).innerText = 'エラー';
+        document.getElementById(`status-${track.id}`).style.color = 'var(--danger-color)';
+      }
+
+      loadedCount++;
+      loadingText.innerText = `オーディオデータをロード中... (${loadedCount}/${totalCount})`;
+      progressBar.style.width = `${(loadedCount / totalCount) * 100}%`;
+    }
+
+    loadingBanner.style.display = 'none';
+    btnPlay.disabled = false;
+    seekSlider.disabled = false;
+    renderCueButtons();
+  }
+
+  function play(offset = pauseOffset) {
+    if (isPlaying) stopSources();
+
+    initAudioContext();
+    const speed = parseFloat(speedSlider.value);
+
+    tracks.forEach(track => {
+      if (!track.buffer) return;
+
+      track.source = audioCtx.createBufferSource();
+      track.source.buffer = track.buffer;
+      track.source.playbackRate.value = speed;
+
+      if (!track.gainNode) {
+        track.gainNode = audioCtx.createGain();
+        track.gainNode.connect(masterGainNode);
+      }
+
+      updateTrackGain(track);
+      track.source.connect(track.gainNode);
+      track.source.start(0, offset);
+    });
+
+    startTime = audioCtx.currentTime - (offset / speed);
+    isPlaying = true;
+
+    btnPlay.disabled = true;
+    btnPause.disabled = false;
+    btnStop.disabled = false;
+
+    updateProgress();
+  }
+
+  function pause() {
+    if (!isPlaying) return;
+    pauseOffset = getCurrentTime();
+    stopSources();
+    isPlaying = false;
+
+    btnPlay.disabled = false;
+    btnPause.disabled = true;
+    cancelAnimationFrame(animFrameId);
+  }
+
+  function stop() {
+    pauseOffset = 0;
+    stopSources();
+    isPlaying = false;
+
+    seekSlider.value = 0;
+    timeCurrent.innerText = "00:00";
+
+    btnPlay.disabled = false;
+    btnPause.disabled = true;
+    btnStop.disabled = true;
+    cancelAnimationFrame(animFrameId);
+  }
+
+  function jumpToTime(targetTime) {
+    pauseOffset = Math.min(targetTime, duration);
+    timeCurrent.innerText = formatTime(pauseOffset);
+    seekSlider.value = pauseOffset;
+
+    if (isPlaying) play(pauseOffset);
+  }
+
+  function stopSources() {
+    tracks.forEach(track => {
+      if (track.source) {
+        try { track.source.stop(); } catch(e) {}
+        track.source.disconnect();
+        track.source = null;
+      }
+    });
+  }
+
+  function getCurrentTime() {
+    if (!isPlaying) return pauseOffset;
+    const speed = parseFloat(speedSlider.value);
+    return Math.min(duration, (audioCtx.currentTime - startTime) * speed);
+  }
+
+  function updateProgress() {
+    if (!isPlaying) return;
+    const current = getCurrentTime();
+
+    // A-B ループ判定
+    if (isLoopActive && loopEndTime > loopStartTime && current >= loopEndTime) {
+      jumpToTime(loopStartTime);
+      return;
+    }
+
+    seekSlider.value = current;
+    timeCurrent.innerText = formatTime(current);
+
+    if (current >= duration) {
+      if (isLoopActive) {
+        jumpToTime(loopStartTime);
+      } else {
+        stop();
+      }
+      return;
+    }
+    animFrameId = requestAnimationFrame(updateProgress);
+  }
+
+  function updateTrackGain(track) {
+    if (!track.gainNode) return;
+    const hasSolo = tracks.some(t => t.isSolo);
+    let targetGain = track.volume;
+
+    if (track.isMuted) {
+      targetGain = 0;
+    } else if (hasSolo && !track.isSolo) {
+      targetGain = 0;
+    }
+
+    track.gainNode.gain.setValueAtTime(targetGain, audioCtx.currentTime);
+  }
+
+  function toggleMute(track, btn) {
+    track.isMuted = !track.isMuted;
+    btn.classList.toggle('active', track.isMuted);
+    updateTrackGain(track);
+  }
+
+  function toggleSolo(track, btn) {
+    track.isSolo = !track.isSolo;
+    btn.classList.toggle('active', track.isSolo);
+    tracks.forEach(t => updateTrackGain(t));
+  }
+
+  function setTrackVolume(track, val) {
+    track.volume = val;
+    updateTrackGain(track);
+  }
+
+  function formatTime(sec) {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = Math.floor(sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+  }
+
+  // イベント
+  bankSelect.addEventListener('change', (e) => {
+    currentBankId = e.target.value;
+    loadAudioFiles();
+  });
+
+  btnPlay.addEventListener('click', () => play());
+  btnPause.addEventListener('click', () => pause());
+  btnStop.addEventListener('click', () => stop());
+
+  seekSlider.addEventListener('input', (e) => {
+    jumpToTime(parseFloat(e.target.value));
+  });
+
+  speedSlider.addEventListener('input', (e) => {
+    const speed = parseFloat(e.target.value);
+    speedVal.innerText = speed.toFixed(2);
+    if (isPlaying) play(getCurrentTime());
+  });
+
+  masterVolume.addEventListener('input', (e) => {
+    if (masterGainNode) masterGainNode.gain.value = parseFloat(e.target.value);
+  });
+
+  // A-B ループイベント
+  btnToggleLoop.addEventListener('click', () => {
+    isLoopActive = !isLoopActive;
+    btnToggleLoop.classList.toggle('active', isLoopActive);
+  });
+
+  btnSetLoopA.addEventListener('click', () => {
+    loopStartTime = getCurrentTime();
+    loopStartInput.value = formatTime(loopStartTime);
+  });
+
+  btnSetLoopB.addEventListener('click', () => {
+    loopEndTime = getCurrentTime();
+    loopEndInput.value = formatTime(loopEndTime);
+  });
+
+  loopStartInput.addEventListener('change', (e) => {
+    loopStartTime = parseTimeToSeconds(e.target.value);
+    e.target.value = formatTime(loopStartTime);
+  });
+
+  loopEndInput.addEventListener('change', (e) => {
+    loopEndTime = parseTimeToSeconds(e.target.value);
+    e.target.value = formatTime(loopEndTime);
+  });
+
+  btnOpenSettings.addEventListener('click', () => {
+    renderSettingsList();
+    modalOverlay.classList.add('open');
+  });
+
+  const closeModal = () => modalOverlay.classList.remove('open');
+  btnCloseSettings.addEventListener('click', closeModal);
+  btnSaveClose.addEventListener('click', closeModal);
+
+  btnAddCue.addEventListener('click', () => addCue(inputLabel.value, inputTime.value));
+
+  btnAddCurrentCue.addEventListener('click', () => {
+    const current = getCurrentTime();
+    const label = prompt('セクション名を入力してください', `Point (${formatTime(current)})`);
+    if (label) addCue(label, current);
+  });
+
+  btnResetCues.addEventListener('click', () => {
+    if (confirm('サーバー定義（config.json）の初期セクションに戻しますか？')) {
+      cuePoints = [...defaultCuePoints];
+      saveCuePoints();
+    }
+  });
+
+  window.addEventListener('DOMContentLoaded', loadConfig);
+</script>
+</body>
+</html>

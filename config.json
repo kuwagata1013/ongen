@@ -1,0 +1,27 @@
+{
+  "title": "ONGEN",
+  "soundBanks": [
+    { "id": "sound1", "name": "MS Basic(標準音源)" },
+    { "id": "sound2", "name": "MuseSounds(別音源)" }
+  ],
+  "cuePoints": [
+    { "label": "Tempo Rubato", "time": 0 },
+    { "label": "69~74ca.", "time": 18 },
+    { "label": "56~64ca.", "time": 46.6 },
+    { "label": "meno mosso", "time": 112.7 },
+    { "label": "110ca.", "time": 162.7 },
+    { "label": "Swing! 220ca.", "time": 180.2 },
+    { "label": "12/8", "time": 197.6 },
+    { "label": "even 8th 110ca.", "time": 202 },
+    { "label": "Swing! 220ca.", "time": 235.5 }
+  ],
+  "tracks": [
+    { "id": "eb", "name": "E♭ Clarinet", "file": "eb.mp3" },
+    { "id": "b1", "name": "1st B♭ Clarinet", "file": "b1.mp3" },
+    { "id": "b2", "name": "2nd B♭ Clarinet", "file": "b2.mp3" },
+    { "id": "b3", "name": "3rd B♭ Clarinet", "file": "b3.mp3" },
+    { "id": "b4", "name": "4th B♭ Clarinet", "file": "b4.mp3" },
+    { "id": "bass", "name": "Bass Clarinet", "file": "bass.mp3" },
+    { "id": "metro", "name": "Metronome / Click", "file": "metro.mp3", "isMetro": true }
+  ]
+}
