@@ -542,10 +542,13 @@
   let cuePoints = [];
   let defaultCuePoints = [];
   let trackDefinitions = [];
+  
   let audioCtx = null;
   let masterGainNode = null;
   let tracks = [];
   let isPlaying = false;
+  let startTime = 0;
+  let pauseOffset = 0;
   let duration = 0;
   let animFrameId = null;
 
@@ -647,7 +650,7 @@
       const btn = document.createElement('button');
       btn.className = 'btn-cue';
       btn.innerText = `${cue.label} (${formatTime(cue.time)})`;
-      btn.disabled = !tracks.some(t => t.isReady);
+      btn.disabled = !tracks.some(t => t.buffer);
       btn.addEventListener('click', () => jumpToTime(cue.time));
       cueButtonsContainer.appendChild(btn);
     });
@@ -700,7 +703,6 @@
     saveCuePoints();
   };
 
-  // iOS用のAudioContext初期化
   function initAudioContext() {
     if (!audioCtx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -733,24 +735,14 @@
       `;
       tracksContainer.appendChild(card);
 
-      const audioElement = new Audio();
-      audioElement.crossOrigin = "anonymous";
-
-      // iOS Safariのピッチ制御対応
-      try {
-        audioElement.preservesPitch = true;
-        audioElement.webkitPreservesPitch = true;
-      } catch(e) {}
-
       return {
         ...def,
-        audioElement,
-        mediaNode: null,
+        buffer: null,
+        source: null,
         gainNode: null,
         volume: 1,
         isMuted: false,
-        isSolo: false,
-        isReady: false
+        isSolo: false
       };
     });
 
@@ -763,6 +755,7 @@
 
   async function loadAudioFiles() {
     stop();
+    initAudioContext();
     loadingBanner.style.display = 'block';
     btnPlay.disabled = true;
 
@@ -773,21 +766,18 @@
       try {
         document.getElementById(`status-${track.id}`).innerText = 'DL中...';
         const url = `audio/${currentBankId}/${track.file}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP Error');
+        const arrayBuffer = await res.arrayBuffer();
 
-        track.audioElement.src = url;
+        document.getElementById(`status-${track.id}`).innerText = '解凍中...';
+        track.buffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-        await new Promise((resolve, reject) => {
-          track.audioElement.oncanplaythrough = () => resolve();
-          track.audioElement.onerror = () => reject();
-          track.audioElement.load();
-        });
-
-        track.isReady = true;
         document.getElementById(`status-${track.id}`).innerText = '準備完了';
         document.getElementById(`status-${track.id}`).style.color = 'var(--accent-color)';
 
-        if (track.audioElement.duration > duration) {
-          duration = track.audioElement.duration;
+        if (track.buffer.duration > duration) {
+          duration = track.buffer.duration;
           timeTotal.innerText = formatTime(duration);
           seekSlider.max = duration;
           if (loopEndTime === 0) {
@@ -811,41 +801,42 @@
     renderCueButtons();
   }
 
-  function play(targetTime = null) {
+  function stopSources() {
+    tracks.forEach(track => {
+      if (track.source) {
+        try { track.source.stop(); } catch(e) {}
+        track.source.disconnect();
+        track.source = null;
+      }
+    });
+  }
+
+  function play(offset = pauseOffset) {
+    if (isPlaying) stopSources();
+
     initAudioContext();
     const speed = parseFloat(speedSlider.value);
 
-    // ノード接続（最初のユーザー操作時にまとめてバインド）
     tracks.forEach(track => {
-      if (track.isReady && !track.mediaNode && audioCtx) {
-        try {
-          track.mediaNode = audioCtx.createMediaElementSource(track.audioElement);
-          track.gainNode = audioCtx.createGain();
-          track.mediaNode.connect(track.gainNode);
-          track.gainNode.connect(masterGainNode);
-        } catch (e) {}
-      }
-    });
+      if (!track.buffer) return;
 
-    tracks.forEach(track => {
-      if (!track.isReady) return;
-      
-      try {
-        track.audioElement.playbackRate = speed;
-      } catch(e) {}
+      track.source = audioCtx.createBufferSource();
+      track.source.buffer = track.buffer;
+      track.source.playbackRate.value = speed;
 
-      if (targetTime !== null) {
-        track.audioElement.currentTime = targetTime;
+      if (!track.gainNode) {
+        track.gainNode = audioCtx.createGain();
+        track.gainNode.connect(masterGainNode);
       }
+
       updateTrackGain(track);
-      
-      const playPromise = track.audioElement.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(error => console.log('Playback error:', error));
-      }
+      track.source.connect(track.gainNode);
+      track.source.start(0, offset);
     });
 
+    startTime = audioCtx.currentTime - (offset / speed);
     isPlaying = true;
+
     btnPlay.disabled = true;
     btnPause.disabled = false;
     btnStop.disabled = false;
@@ -855,22 +846,18 @@
 
   function pause() {
     if (!isPlaying) return;
-    tracks.forEach(track => {
-      if (track.isReady) track.audioElement.pause();
-    });
+    pauseOffset = getCurrentTime();
+    stopSources();
     isPlaying = false;
+
     btnPlay.disabled = false;
     btnPause.disabled = true;
     cancelAnimationFrame(animFrameId);
   }
 
   function stop() {
-    tracks.forEach(track => {
-      if (track.isReady) {
-        track.audioElement.pause();
-        track.audioElement.currentTime = 0;
-      }
-    });
+    pauseOffset = 0;
+    stopSources();
     isPlaying = false;
 
     seekSlider.value = 0;
@@ -883,19 +870,19 @@
   }
 
   function jumpToTime(targetTime) {
-    const target = Math.min(targetTime, duration);
-    timeCurrent.innerText = formatTime(target);
-    seekSlider.value = target;
+    pauseOffset = Math.min(targetTime, duration);
+    timeCurrent.innerText = formatTime(pauseOffset);
+    seekSlider.value = pauseOffset;
 
-    tracks.forEach(track => {
-      if (track.isReady) {
-        track.audioElement.currentTime = target;
-      }
-    });
+    if (isPlaying) {
+      play(pauseOffset);
+    }
   }
 
   function getCurrentTime() {
-    return tracks[0]?.audioElement.currentTime || 0;
+    if (!isPlaying) return pauseOffset;
+    const speed = parseFloat(speedSlider.value);
+    return Math.min(duration, (audioCtx.currentTime - startTime) * speed);
   }
 
   function updateProgress() {
@@ -904,7 +891,6 @@
 
     if (isLoopActive && loopEndTime > loopStartTime && current >= loopEndTime) {
       jumpToTime(loopStartTime);
-      animFrameId = requestAnimationFrame(updateProgress);
       return;
     }
 
@@ -916,8 +902,8 @@
         jumpToTime(loopStartTime);
       } else {
         stop();
-        return;
       }
+      return;
     }
     animFrameId = requestAnimationFrame(updateProgress);
   }
@@ -979,11 +965,9 @@
   speedSlider.addEventListener('input', (e) => {
     const speed = parseFloat(e.target.value);
     speedVal.innerText = speed.toFixed(2);
-    tracks.forEach(track => {
-      if (track.isReady) {
-        try { track.audioElement.playbackRate = speed; } catch(e) {}
-      }
-    });
+    if (isPlaying) {
+      play(getCurrentTime());
+    }
   });
 
   masterVolume.addEventListener('input', (e) => {
