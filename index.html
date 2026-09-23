@@ -547,8 +547,6 @@
   let masterGainNode = null;
   let tracks = [];
   let isPlaying = false;
-  let startTime = 0;
-  let pauseOffset = 0;
   let duration = 0;
   let animFrameId = null;
 
@@ -590,7 +588,7 @@
   const inputTime = document.getElementById('inputTime');
   const cueSettingsList = document.getElementById('cueSettingsList');
 
-  // iOS用 AudioContext 確保・復帰処理
+  // iOS用 AudioContext 初期化
   function unlockAudioContext() {
     if (!audioCtx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -603,7 +601,6 @@
     }
   }
 
-  // 画面操作時の初回タッチで確実にアンロック
   window.addEventListener('touchstart', unlockAudioContext, { once: true });
   window.addEventListener('click', unlockAudioContext, { once: true });
 
@@ -667,7 +664,7 @@
       const btn = document.createElement('button');
       btn.className = 'btn-cue';
       btn.innerText = `${cue.label} (${formatTime(cue.time)})`;
-      btn.disabled = !tracks.some(t => t.buffer);
+      btn.disabled = !tracks.some(t => t.isReady);
       btn.addEventListener('click', () => jumpToTime(cue.time));
       cueButtonsContainer.appendChild(btn);
     });
@@ -740,14 +737,25 @@
       `;
       tracksContainer.appendChild(card);
 
+      // ピッチ保存を施した HTML5 Audio オブジェクトを作成
+      const audioElement = new Audio();
+      audioElement.crossOrigin = "anonymous";
+      audioElement.preload = "auto";
+      
+      // ピッチ（音程）維持フラグを設定
+      audioElement.preservesPitch = true;
+      audioElement.webkitPreservesPitch = true;
+      audioElement.mozPreservesPitch = true;
+
       return {
         ...def,
-        buffer: null,
-        source: null,
+        audioElement,
+        mediaNode: null,
         gainNode: null,
         volume: 1,
         isMuted: false,
-        isSolo: false
+        isSolo: false,
+        isReady: false
       };
     });
 
@@ -771,24 +779,21 @@
       try {
         document.getElementById(`status-${track.id}`).innerText = 'DL中...';
         const url = `audio/${currentBankId}/${track.file}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('HTTP Error');
-        const arrayBuffer = await res.arrayBuffer();
 
-        document.getElementById(`status-${track.id}`).innerText = '解凍中...';
-        
-        // デコード失敗防止（Web Audio Context 依存の回避）
-        const decodedBuffer = await new Promise((resolve, reject) => {
-          audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
+        track.audioElement.src = url;
+
+        await new Promise((resolve, reject) => {
+          track.audioElement.oncanplaythrough = () => resolve();
+          track.audioElement.onerror = () => reject();
+          track.audioElement.load();
         });
 
-        track.buffer = decodedBuffer;
-
+        track.isReady = true;
         document.getElementById(`status-${track.id}`).innerText = '準備完了';
         document.getElementById(`status-${track.id}`).style.color = 'var(--accent-color)';
 
-        if (track.buffer.duration > duration) {
-          duration = track.buffer.duration;
+        if (track.audioElement.duration > duration) {
+          duration = track.audioElement.duration;
           timeTotal.innerText = formatTime(duration);
           seekSlider.max = duration;
           if (loopEndTime === 0) {
@@ -813,42 +818,58 @@
     renderCueButtons();
   }
 
-  function stopSources() {
+  function syncAndSetSpeed(speed) {
+    const masterTime = tracks[0]?.audioElement.currentTime || 0;
     tracks.forEach(track => {
-      if (track.source) {
-        try { track.source.stop(); } catch(e) {}
-        track.source.disconnect();
-        track.source = null;
+      if (track.isReady) {
+        // 全トラックのピッチキープを設定してスピード適用
+        track.audioElement.preservesPitch = true;
+        track.audioElement.webkitPreservesPitch = true;
+        track.audioElement.playbackRate = speed;
+        
+        // 0.05秒以上のズレがあれば主軸トラックに同期補正
+        if (Math.abs(track.audioElement.currentTime - masterTime) > 0.05) {
+          track.audioElement.currentTime = masterTime;
+        }
       }
     });
   }
 
-  function play(offset = pauseOffset) {
-    if (isPlaying) stopSources();
-
+  function play(targetTime = null) {
     unlockAudioContext();
     const speed = parseFloat(speedSlider.value);
 
+    // 初回再生時に Web Audio API ノードバインド
     tracks.forEach(track => {
-      if (!track.buffer) return;
-
-      track.source = audioCtx.createBufferSource();
-      track.source.buffer = track.buffer;
-      track.source.playbackRate.value = speed;
-
-      if (!track.gainNode) {
-        track.gainNode = audioCtx.createGain();
-        track.gainNode.connect(masterGainNode);
+      if (track.isReady && !track.mediaNode && audioCtx) {
+        try {
+          track.mediaNode = audioCtx.createMediaElementSource(track.audioElement);
+          track.gainNode = audioCtx.createGain();
+          track.mediaNode.connect(track.gainNode);
+          track.gainNode.connect(masterGainNode);
+        } catch (e) {}
       }
-
-      updateTrackGain(track);
-      track.source.connect(track.gainNode);
-      track.source.start(0, offset);
     });
 
-    startTime = audioCtx.currentTime - (offset / speed);
-    isPlaying = true;
+    const startTimeVal = targetTime !== null ? targetTime : (tracks[0]?.audioElement.currentTime || 0);
 
+    tracks.forEach(track => {
+      if (!track.isReady) return;
+
+      track.audioElement.currentTime = startTimeVal;
+      track.audioElement.preservesPitch = true;
+      track.audioElement.webkitPreservesPitch = true;
+      track.audioElement.playbackRate = speed;
+      
+      updateTrackGain(track);
+      
+      const p = track.audioElement.play();
+      if (p !== undefined) {
+        p.catch(() => {});
+      }
+    });
+
+    isPlaying = true;
     btnPlay.disabled = true;
     btnPause.disabled = false;
     btnStop.disabled = false;
@@ -858,18 +879,22 @@
 
   function pause() {
     if (!isPlaying) return;
-    pauseOffset = getCurrentTime();
-    stopSources();
+    tracks.forEach(track => {
+      if (track.isReady) track.audioElement.pause();
+    });
     isPlaying = false;
-
     btnPlay.disabled = false;
     btnPause.disabled = true;
     cancelAnimationFrame(animFrameId);
   }
 
   function stop() {
-    pauseOffset = 0;
-    stopSources();
+    tracks.forEach(track => {
+      if (track.isReady) {
+        track.audioElement.pause();
+        track.audioElement.currentTime = 0;
+      }
+    });
     isPlaying = false;
 
     seekSlider.value = 0;
@@ -882,27 +907,36 @@
   }
 
   function jumpToTime(targetTime) {
-    pauseOffset = Math.min(targetTime, duration);
-    timeCurrent.innerText = formatTime(pauseOffset);
-    seekSlider.value = pauseOffset;
+    const target = Math.min(targetTime, duration);
+    timeCurrent.innerText = formatTime(target);
+    seekSlider.value = target;
 
-    if (isPlaying) {
-      play(pauseOffset);
-    }
+    tracks.forEach(track => {
+      if (track.isReady) {
+        track.audioElement.currentTime = target;
+      }
+    });
   }
 
   function getCurrentTime() {
-    if (!isPlaying) return pauseOffset;
-    const speed = parseFloat(speedSlider.value);
-    return Math.min(duration, (audioCtx.currentTime - startTime) * speed);
+    return tracks[0]?.audioElement.currentTime || 0;
   }
 
   function updateProgress() {
     if (!isPlaying) return;
     const current = getCurrentTime();
 
+    // 定期的なトラック間の微小ズレ補正（iOS対策）
+    const speed = parseFloat(speedSlider.value);
+    tracks.forEach(t => {
+      if (t.isReady && Math.abs(t.audioElement.currentTime - current) > 0.08) {
+        t.audioElement.currentTime = current;
+      }
+    });
+
     if (isLoopActive && loopEndTime > loopStartTime && current >= loopEndTime) {
       jumpToTime(loopStartTime);
+      animFrameId = requestAnimationFrame(updateProgress);
       return;
     }
 
@@ -977,9 +1011,7 @@
   speedSlider.addEventListener('input', (e) => {
     const speed = parseFloat(e.target.value);
     speedVal.innerText = speed.toFixed(2);
-    if (isPlaying) {
-      play(getCurrentTime());
-    }
+    syncAndSetSpeed(speed);
   });
 
   masterVolume.addEventListener('input', (e) => {
