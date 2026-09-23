@@ -590,6 +590,23 @@
   const inputTime = document.getElementById('inputTime');
   const cueSettingsList = document.getElementById('cueSettingsList');
 
+  // iOS用 AudioContext 確保・復帰処理
+  function unlockAudioContext() {
+    if (!audioCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContextClass();
+      masterGainNode = audioCtx.createGain();
+      masterGainNode.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  }
+
+  // 画面操作時の初回タッチで確実にアンロック
+  window.addEventListener('touchstart', unlockAudioContext, { once: true });
+  window.addEventListener('click', unlockAudioContext, { once: true });
+
   async function loadConfig() {
     try {
       const res = await fetch('config.json');
@@ -703,18 +720,6 @@
     saveCuePoints();
   };
 
-  function initAudioContext() {
-    if (!audioCtx) {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      audioCtx = new AudioContextClass();
-      masterGainNode = audioCtx.createGain();
-      masterGainNode.connect(audioCtx.destination);
-    }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-  }
-
   function createTrackUI() {
     tracksContainer.innerHTML = '';
     tracks = trackDefinitions.map(def => {
@@ -755,7 +760,7 @@
 
   async function loadAudioFiles() {
     stop();
-    initAudioContext();
+    unlockAudioContext();
     loadingBanner.style.display = 'block';
     btnPlay.disabled = true;
 
@@ -771,7 +776,13 @@
         const arrayBuffer = await res.arrayBuffer();
 
         document.getElementById(`status-${track.id}`).innerText = '解凍中...';
-        track.buffer = await audioCtx.decodeAudioData(arrayBuffer);
+        
+        // デコード失敗防止（Web Audio Context 依存の回避）
+        const decodedBuffer = await new Promise((resolve, reject) => {
+          audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
+        });
+
+        track.buffer = decodedBuffer;
 
         document.getElementById(`status-${track.id}`).innerText = '準備完了';
         document.getElementById(`status-${track.id}`).style.color = 'var(--accent-color)';
@@ -786,6 +797,7 @@
           }
         }
       } catch (err) {
+        console.error(err);
         document.getElementById(`status-${track.id}`).innerText = 'エラー';
         document.getElementById(`status-${track.id}`).style.color = 'var(--danger-color)';
       }
@@ -814,7 +826,7 @@
   function play(offset = pauseOffset) {
     if (isPlaying) stopSources();
 
-    initAudioContext();
+    unlockAudioContext();
     const speed = parseFloat(speedSlider.value);
 
     tracks.forEach(track => {
@@ -902,8 +914,8 @@
         jumpToTime(loopStartTime);
       } else {
         stop();
+        return;
       }
-      return;
     }
     animFrameId = requestAnimationFrame(updateProgress);
   }
