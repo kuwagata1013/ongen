@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Clarinet Ensemble Mixer</title>
-  <!-- SoundTouchJS (Pitch-preserving stretch library) -->
-  <script src="https://cdn.jsdelivr.net/npm/soundtouchjs@0.1.30/dist/soundtouch.min.js"></script>
   <style>
     :root {
       --bg-color: #0f1115;
@@ -549,8 +547,6 @@
   let masterGainNode = null;
   let tracks = [];
   let isPlaying = false;
-  let startTime = 0;
-  let pauseOffset = 0;
   let duration = 0;
   let animFrameId = null;
 
@@ -667,7 +663,7 @@
       const btn = document.createElement('button');
       btn.className = 'btn-cue';
       btn.innerText = `${cue.label} (${formatTime(cue.time)})`;
-      btn.disabled = !tracks.some(t => t.buffer);
+      btn.disabled = !tracks.some(t => t.isReady);
       btn.addEventListener('click', () => jumpToTime(cue.time));
       cueButtonsContainer.appendChild(btn);
     });
@@ -740,16 +736,25 @@
       `;
       tracksContainer.appendChild(card);
 
+      // HTML5 Audio 要素でピッチ固定機能を設定
+      const audioElement = new Audio();
+      audioElement.crossOrigin = "anonymous";
+      audioElement.preload = "auto";
+
+      // ブラウザ標準のピッチ維持フラグを最優先適用
+      audioElement.preservesPitch = true;
+      audioElement.webkitPreservesPitch = true;
+      audioElement.mozPreservesPitch = true;
+
       return {
         ...def,
-        buffer: null,
-        soundTouch: null,
-        filter: null,
-        node: null,
+        audioElement,
+        mediaNode: null,
         gainNode: null,
         volume: 1,
         isMuted: false,
-        isSolo: false
+        isSolo: false,
+        isReady: false
       };
     });
 
@@ -773,23 +778,21 @@
       try {
         document.getElementById(`status-${track.id}`).innerText = 'DL中...';
         const url = `audio/${currentBankId}/${track.file}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('HTTP Error');
-        const arrayBuffer = await res.arrayBuffer();
 
-        document.getElementById(`status-${track.id}`).innerText = '解凍中...';
-        
-        const decodedBuffer = await new Promise((resolve, reject) => {
-          audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
+        track.audioElement.src = url;
+
+        await new Promise((resolve, reject) => {
+          track.audioElement.oncanplaythrough = () => resolve();
+          track.audioElement.onerror = () => reject();
+          track.audioElement.load();
         });
 
-        track.buffer = decodedBuffer;
-
+        track.isReady = true;
         document.getElementById(`status-${track.id}`).innerText = '準備完了';
         document.getElementById(`status-${track.id}`).style.color = 'var(--accent-color)';
 
-        if (track.buffer.duration > duration) {
-          duration = track.buffer.duration;
+        if (track.audioElement.duration > duration) {
+          duration = track.audioElement.duration;
           timeTotal.innerText = formatTime(duration);
           seekSlider.max = duration;
           if (loopEndTime === 0) {
@@ -814,83 +817,56 @@
     renderCueButtons();
   }
 
-  function stopSources() {
+  function applySpeedAndPitch() {
+    const speed = parseFloat(speedSlider.value);
+    const masterTime = tracks[0]?.audioElement.currentTime || 0;
+
     tracks.forEach(track => {
-      if (track.node) {
-        try { track.node.disconnect(); } catch(e) {}
-        track.node = null;
+      if (track.isReady) {
+        track.audioElement.preservesPitch = true;
+        track.audioElement.webkitPreservesPitch = true;
+        track.audioElement.playbackRate = speed;
+
+        // トラック間のわずかなズレを即時補正
+        if (Math.abs(track.audioElement.currentTime - masterTime) > 0.05) {
+          track.audioElement.currentTime = masterTime;
+        }
       }
-      track.soundTouch = null;
-      track.filter = null;
     });
   }
 
-  function play(offset = pauseOffset) {
-    if (isPlaying) stopSources();
-
+  function play(targetTime = null) {
     unlockAudioContext();
-    const speed = parseFloat(speedSlider.value);
 
+    // 初回再生時に Web Audio API ノードバインド
     tracks.forEach(track => {
-      if (!track.buffer) return;
-
-      // SoundTouchJS のソース・フィルター作成
-      const bufferSource = {
-        extract: function (target, numFrames, position) {
-          const channels = [];
-          for (let i = 0; i < track.buffer.numberOfChannels; i++) {
-            channels.push(track.buffer.getChannelData(i));
-          }
-          for (let i = 0; i < numFrames; i++) {
-            for (let ch = 0; ch < track.buffer.numberOfChannels; ch++) {
-              target[i * track.buffer.numberOfChannels + ch] = channels[ch][position + i] || 0;
-            }
-          }
-          return Math.min(numFrames, track.buffer.length - position);
-        }
-      };
-
-      track.soundTouch = new soundtouch.SoundTouch(audioCtx.sampleRate);
-      track.soundTouch.tempo = speed;
-      track.soundTouch.pitch = 1.0; // 音程は1.0固定（変わらない）
-
-      track.filter = new soundtouch.SimpleFilter(bufferSource, track.soundTouch);
-      track.filter.sourcePosition = Math.floor(offset * audioCtx.sampleRate);
-
-      // Web Audio API ノード生成
-      const bufferSize = 2048;
-      track.node = audioCtx.createScriptProcessor(bufferSize, 2, 2);
-      const samples = new Float32Array(bufferSize * 2);
-
-      track.node.onaudioprocess = function (e) {
-        const left = e.outputBuffer.getChannelData(0);
-        const right = e.outputBuffer.getChannelData(1);
-        const framesExtracted = track.filter.extract(samples, bufferSize);
-
-        if (framesExtracted === 0) {
-          left.fill(0);
-          right.fill(0);
-          return;
-        }
-
-        for (let i = 0; i < bufferSize; i++) {
-          left[i] = samples[i * 2];
-          right[i] = samples[i * 2 + 1];
-        }
-      };
-
-      if (!track.gainNode) {
-        track.gainNode = audioCtx.createGain();
-        track.gainNode.connect(masterGainNode);
+      if (track.isReady && !track.mediaNode && audioCtx) {
+        try {
+          track.mediaNode = audioCtx.createMediaElementSource(track.audioElement);
+          track.gainNode = audioCtx.createGain();
+          track.mediaNode.connect(track.gainNode);
+          track.gainNode.connect(masterGainNode);
+        } catch (e) {}
       }
-
-      updateTrackGain(track);
-      track.node.connect(track.gainNode);
     });
 
-    startTime = audioCtx.currentTime - (offset / speed);
-    isPlaying = true;
+    const startTimeVal = targetTime !== null ? targetTime : (tracks[0]?.audioElement.currentTime || 0);
 
+    tracks.forEach(track => {
+      if (!track.isReady) return;
+
+      track.audioElement.currentTime = startTimeVal;
+      updateTrackGain(track);
+      
+      const p = track.audioElement.play();
+      if (p !== undefined) {
+        p.catch(() => {});
+      }
+    });
+
+    applySpeedAndPitch();
+
+    isPlaying = true;
     btnPlay.disabled = true;
     btnPause.disabled = false;
     btnStop.disabled = false;
@@ -900,18 +876,22 @@
 
   function pause() {
     if (!isPlaying) return;
-    pauseOffset = getCurrentTime();
-    stopSources();
+    tracks.forEach(track => {
+      if (track.isReady) track.audioElement.pause();
+    });
     isPlaying = false;
-
     btnPlay.disabled = false;
     btnPause.disabled = true;
     cancelAnimationFrame(animFrameId);
   }
 
   function stop() {
-    pauseOffset = 0;
-    stopSources();
+    tracks.forEach(track => {
+      if (track.isReady) {
+        track.audioElement.pause();
+        track.audioElement.currentTime = 0;
+      }
+    });
     isPlaying = false;
 
     seekSlider.value = 0;
@@ -924,19 +904,19 @@
   }
 
   function jumpToTime(targetTime) {
-    pauseOffset = Math.min(targetTime, duration);
-    timeCurrent.innerText = formatTime(pauseOffset);
-    seekSlider.value = pauseOffset;
+    const target = Math.min(targetTime, duration);
+    timeCurrent.innerText = formatTime(target);
+    seekSlider.value = target;
 
-    if (isPlaying) {
-      play(pauseOffset);
-    }
+    tracks.forEach(track => {
+      if (track.isReady) {
+        track.audioElement.currentTime = target;
+      }
+    });
   }
 
   function getCurrentTime() {
-    if (!isPlaying) return pauseOffset;
-    const speed = parseFloat(speedSlider.value);
-    return Math.min(duration, (audioCtx.currentTime - startTime) * speed);
+    return tracks[0]?.audioElement.currentTime || 0;
   }
 
   function updateProgress() {
@@ -945,6 +925,7 @@
 
     if (isLoopActive && loopEndTime > loopStartTime && current >= loopEndTime) {
       jumpToTime(loopStartTime);
+      animFrameId = requestAnimationFrame(updateProgress);
       return;
     }
 
@@ -1019,17 +1000,7 @@
   speedSlider.addEventListener('input', (e) => {
     const speed = parseFloat(e.target.value);
     speedVal.innerText = speed.toFixed(2);
-    
-    // SoundTouch にリアルタイムで新スピードを反映
-    tracks.forEach(track => {
-      if (track.soundTouch) {
-        track.soundTouch.tempo = speed;
-      }
-    });
-
-    if (isPlaying) {
-      startTime = audioCtx.currentTime - (getCurrentTime() / speed);
-    }
+    applySpeedAndPitch();
   });
 
   masterVolume.addEventListener('input', (e) => {
